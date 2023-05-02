@@ -1,0 +1,647 @@
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 1   
+
+
+C51 COMPILER V9.59.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\obj\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c LARGE OPTIMIZE(8,SPEED) INCDIR(.\font;.\LCD;.\sys;.\touch;.\GUI;.
+                    -\USER) DEBUG OBJECTEXTEND TABS(2) OBJECT(.\obj\main.obj)
+
+line level    source
+
+   1          //19/04/2021
+   2          #include "initsys.h"
+   3          
+   4          #include "Isd4004Spi.h"
+   5          #include "fingerprint.h"
+   6          #include <math.h> 
+   7          float goertzel_mag(int numSamples,int TARGET_FREQUENCY,int SAMPLING_RATE);
+   8          int ADC_IN(int num);
+   9          int IsAlarmDetected(int numofinstans,int mag);
+  10          int IsAlarmDetected2();
+  11          int IsAlarmDetected_trial();
+  12          void open_window() ;
+  13          void close_window();
+  14          int ADC_IN(int num);
+  15          
+  16          // constants for voice messages 
+  17          #define ALARM_DETECTED 0
+  18          #define GET_INSIDE_THE_ROOM 100
+  19          #define GET_OUT_OF_THE_ROOM 300
+  20          #define STAY_IN_THE_ROOM 200
+  21          
+  22          // constant for servo motors 
+  23          #define OPEN_WINDOWS  2000 
+  24          #define CLOSE_WINDOWS 1000  
+  25          
+  26          
+  27          #define DELAY_FOR_STAY_IN_ROOM 5
+  28          void record_all_measeges();
+  29          void test_play_all();
+  30          void start_work();
+  31          
+  32          
+  33          #define NUM_OF_FREQ_TO_CHECK 2 
+  34            
+  35          xdata int  NumInstans[NUM_OF_FREQ_TO_CHECK]; 
+  36          struct WaveProperty  
+  37          {
+  38             int freq; 
+  39             int Th_mag;
+  40             int Th_NumInstans;
+  41          };
+  42          
+  43          //xdata struct WaveProperty wave_property_arr[NUM_OF_FREQ_TO_CHECK]={{700,70,8},{800,150,20},{900,60,9}};
+  44          //xdata struct WaveProperty wave_property_arr[NUM_OF_FREQ_TO_CHECK]={{700,70,8},{800,100,20},{900,60,9}};
+  45          xdata struct WaveProperty wave_property_arr[NUM_OF_FREQ_TO_CHECK]={{800,80,40},{900,60,30}};
+  46          //xdata struct WaveProperty wave_property_arr[NUM_OF_FREQ_TO_CHECK]={{800,100,20}};
+  47          //xdata struct WaveProperty wave_property_arr[NUM_OF_FREQ_TO_CHECK]={{800,150,20}};
+  48          xdata char my_string[20];
+  49          xdata U16 data_in[210];
+  50          xdata num=0;
+  51          
+  52          
+  53          extern  PageID; 
+  54          
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 2   
+
+  55          void Init_Device(void);
+  56          
+  57          void MenuScreen();
+  58          
+  59          
+  60          void servo(unsigned int Width)  
+  61          {
+  62   1        if(Width>2300) Width=2300;
+  63   1        if(Width<700) Width=700;
+  64   1        Width=-4*Width;
+  65   1        
+  66   1          PCA0CPL0= Width;
+  67   1          PCA0CPH0= Width>>8; 
+  68   1      }
+  69          void servo2(unsigned int Width)  
+  70          {
+  71   1        if(Width>2300) Width=2300;
+  72   1        if(Width<700) Width=700;
+  73   1        Width=-4*Width;
+  74   1        
+  75   1          PCA0CPL1= Width;
+  76   1          PCA0CPH1= Width>>8; 
+  77   1      }
+  78          
+  79          
+  80          void main(void)
+  81          {
+  82   1        S16 x=0, y=0,  ButtonNum;
+  83   1        Init_Device();
+  84   1        initSYS();  // initalize the touch LCD library + delay function 
+  85   1        servo(OPEN_WINDOWS);
+  86   1        servo2(OPEN_WINDOWS);
+  87   1        MenuScreen();
+  88   1      
+  89   1        while(1) {
+  90   2          if(!T_IRQ) {
+  91   3            delay_ms(10);
+  92   3            x = ReadTouchX();
+  93   3            y = ReadTouchY();
+  94   3            ButtonNum= ButtonTouch(x, y);
+  95   3            if(ButtonNum==1){ 
+  96   4              LCD_fillScreen(BLACK);    
+  97   4              LCD_print2C(20,150,"Record1 ",3,WHITE,BLACK);       
+  98   4              Record(0);
+  99   4              LCD_print2C(20,150,"Play1 ",3,WHITE,BLACK);     
+ 100   4              PlayI(0);
+ 101   4              MenuScreen();
+ 102   4            }
+ 103   3            else if(ButtonNum==2){ 
+ 104   4              LCD_fillScreen(BLACK);    
+ 105   4              LCD_print2C(20,150,"Record2 ",3,WHITE,BLACK);       
+ 106   4              Record(100);
+ 107   4              LCD_print2C(20,150,"Play2 ",3,WHITE,BLACK);     
+ 108   4              PlayI(100);
+ 109   4              MenuScreen();
+ 110   4            }
+ 111   3            else if(ButtonNum==3){
+ 112   4              LCD_fillScreen(BLACK);    
+ 113   4              LCD_print2C(20,150,"Record3 ",3,WHITE,BLACK);       
+ 114   4              Record(200);
+ 115   4              LCD_print2C(20,150,"Play3  ",3,WHITE,BLACK);      
+ 116   4              PlayI(200);
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 3   
+
+ 117   4              MenuScreen();   
+ 118   4            }
+ 119   3            else if(ButtonNum==4) {
+ 120   4              LCD_fillScreen(BLACK);    
+ 121   4              LCD_print2C(20,150,"Record4 ",3,WHITE,BLACK);       
+ 122   4              Record(300);
+ 123   4              LCD_print2C(20,150,"Play4 ",3,WHITE,BLACK);     
+ 124   4              PlayI(300);
+ 125   4              MenuScreen();
+ 126   4            }
+ 127   3            
+ 128   3            else if(ButtonNum==5) {
+ 129   4              LCD_fillScreen(BLACK);    
+ 130   4              LCD_print2C(20,150,"Record5 ",3,WHITE,BLACK);       
+ 131   4              Record(400);
+ 132   4              LCD_print2C(20,150,"Play5 ",3,WHITE,BLACK);     
+ 133   4            //  PlayI(400);
+ 134   4              MenuScreen();
+ 135   4            }
+ 136   3            else if(ButtonNum==6) {
+ 137   4              LCD_fillScreen(BLACK);    
+ 138   4              LCD_print2C(20,150,"SERVO ",3,WHITE,BLACK); 
+ 139   4              servo(1000);
+ 140   4              servo2(1000);
+ 141   4              delay_ms(2000);
+ 142   4              LCD_print2C(20,150,"SERVO ",3,WHITE,BLACK);   
+ 143   4              servo(1500);
+ 144   4              servo2(1500);
+ 145   4              delay_ms(2000);
+ 146   4              servo(2000);
+ 147   4              servo2(2000);
+ 148   4              delay_ms(2000);
+ 149   4              MenuScreen();
+ 150   4            }
+ 151   3            else if(ButtonNum==7) {
+ 152   4              LCD_fillScreen(BLACK);  
+ 153   4              LCD_print2C(20,150,"Blu  ",3,WHITE,BLACK);
+ 154   4              LCD_print2C(20,150,"Send SMS  ",3,WHITE,BLACK);       
+ 155   4              SetTarget(1); // before sending to BT switch printf to uart
+ 156   4              //printf("**0527033526");
+ 157   4              printf("**0527033526");
+ 158   4              delay_ms(1000);
+ 159   4              printf("##Go to safety room");
+ 160   4              delay_ms(1000);
+ 161   4              printf("$$");
+ 162   4              delay_ms(1000);
+ 163   4              printf("**0527033526");
+ 164   4              delay_ms(1000);
+ 165   4              printf("##caseft2");
+ 166   4              delay_ms(1000);
+ 167   4              printf("$$");
+ 168   4              
+ 169   4              MenuScreen();
+ 170   4            }
+ 171   3            
+ 172   3            else if(ButtonNum==8) {
+ 173   4      //        while(1)
+ 174   4      //        {   
+ 175   4      //          //int x;
+ 176   4      //           while (( IsAlarmDetected2()==0));
+ 177   4      //           x=6;
+ 178   4      //         }
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 4   
+
+ 179   4              start_work();
+ 180   4      
+ 181   4      //        printf("error not find  "); 
+ 182   4      //        SetTarget(1); // uart
+ 183   4      //        printf("**0587909902");
+ 184   4      //        delay_ms(1000);
+ 185   4      //        printf("##55555555555551");
+ 186   4      //        delay_ms(1000);
+ 187   4      //        printf("$$");
+ 188   4      //          SetTarget(0); // uart
+ 189   4              }
+ 190   3              while(T_IRQ); 
+ 191   3              MenuScreen();
+ 192   3            }
+ 193   2              else if(ButtonNum==9) {
+ 194   3                PlayI(0);
+ 195   3                PlayI(100);
+ 196   3                PlayI(200);
+ 197   3                PlayI(300);
+ 198   3              //  PlayI(400);
+ 199   3           }  
+ 200   2         }
+ 201   1       }
+ 202          
+ 203           void MenuScreen() 
+ 204          {
+ 205   1        LCD_fillScreen(BLACK);
+ 206   1        LCD_print2C(20,30,"Test Voicer",3,WHITE,BLACK);
+ 207   1        LCD_clearButton();  
+ 208   1        LCD_drawButton(1,10,  80,60,60, 10, WHITE,BLACK,"Rec1",2);
+ 209   1        LCD_drawButton(2,80, 80,60,60, 10, GRAY,BLACK,"Rec2",2);
+ 210   1        LCD_drawButton(3,150, 80,60,60, 10, WHITE,BLACK,"Rec3",2);
+ 211   1        LCD_drawButton(4,220, 80,60,60, 10, GRAY,BLACK,"Rec4",2);
+ 212   1        LCD_drawButton(5,290, 80,60,60, 10, WHITE,BLACK,"Rec5",2);
+ 213   1        LCD_drawButton(6,10, 200,60,60, 10, RED,WHITE,"SERVO",2);
+ 214   1        LCD_drawButton(7,80, 200,60,60, 10, BLUE,WHITE,"blu ",2);
+ 215   1        LCD_drawButton(8,150, 200,60,60, 10, YELLOW,BLACK,"finger ",2);
+ 216   1        LCD_drawButton(9,220, 200,60,60, 10, GREEN,BLACK,"Play All ",2);
+ 217   1        LCD_setText2Color(WHITE,BLACK);
+ 218   1      }
+ 219          
+ 220          
+ 221          //from previous project 
+ 222          void start_work()
+ 223          {
+ 224   1          int i;
+ 225   1          LCD_fillScreen(BLACK);
+ 226   1          LCD_print2C(20,30,"press for abort",1,WHITE,BLACK);
+ 227   1          while (( IsAlarmDetected2()==0) && T_IRQ) ;//check alarm detected or abort 
+ 228   1          if (!T_IRQ) return;
+ 229   1          // reverse the data that is been sent to P3.7 - P3.4 to trigger VT at reciver side  
+ 230   1          P2 = P2 ^ 0xF0 ;  
+ 231   1          LCD_fillScreen(BLACK);
+ 232   1          LCD_print2C(20,30,"alarm detected",1,WHITE,BLACK);
+ 233   1          PlayI (ALARM_DETECTED);
+ 234   1          delay_ms(100);
+ 235   1          // SEND SMS TO ALL CLIENTS 
+ 236   1              SetTarget(1); // uart
+ 237   1              printf("**0587909902");
+ 238   1              delay_ms(1000);
+ 239   1              printf("##RED COLOR ALARM");
+ 240   1              delay_ms(1000);
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 5   
+
+ 241   1              printf("$$");
+ 242   1              SetTarget(0); // uart
+ 243   1        
+ 244   1        
+ 245   1        
+ 246   1        
+ 247   1          LCD_print2C(20,60,"go to safe room",1,WHITE,BLACK);
+ 248   1          PlayI (GET_INSIDE_THE_ROOM);
+ 249   1          //close_window ;
+ 250   1          servo(CLOSE_WINDOWS);
+ 251   1          servo2(CLOSE_WINDOWS) ;
+ 252   1          for(i=0;i<DELAY_FOR_STAY_IN_ROOM;i++)
+ 253   1          {
+ 254   2             delay_ms(1);
+ 255   2             sprintf(my_string,"i=%d",i); 
+ 256   2             LCD_print2C(20,60,my_string,1,WHITE,BLACK);      
+ 257   2             if (IsAlarmDetected2()==1)
+ 258   2             { 
+ 259   3               i=0;
+ 260   3               sprintf(my_string,"i=%d",i);
+ 261   3               LCD_print2C(20,60,"redetect",1,WHITE,BLACK); 
+ 262   3               PlayI(STAY_IN_THE_ROOM);
+ 263   3               delay_ms(1000);
+ 264   3             }
+ 265   2          } 
+ 266   1          //open_window
+ 267   1          servo(OPEN_WINDOWS);
+ 268   1          servo(OPEN_WINDOWS);
+ 269   1          servo2(OPEN_WINDOWS); 
+ 270   1          LCD_print2C(20,60,"get out of room",1,WHITE,BLACK); 
+ 271   1          PlayI(GET_OUT_OF_THE_ROOM);
+ 272   1      }
+ 273                  
+ 274          
+ 275          
+ 276          
+ 277          
+ 278          void record_all_measeges()
+ 279          {
+ 280   1        LCD_fillScreen(BLACK);
+ 281   1        LCD_printCenter(0, 10,"enter mes 0  0" , 2,RED, BLACK);
+ 282   1        Record(0);
+ 283   1        PlayI(0);
+ 284   1        //LCD_fillScreen(BLACK);
+ 285   1        LCD_printCenter(0, 40,"enter mes 1  100" , 2,RED, BLACK);
+ 286   1        Record(100);
+ 287   1        PlayI(100);
+ 288   1        //LCD_fillScreen(BLACK);
+ 289   1        LCD_printCenter(0, 80,"enter mes 2  200" , 2,RED, BLACK);
+ 290   1        Record(200);
+ 291   1        PlayI(200);
+ 292   1        //LCD_fillScreen(BLACK);
+ 293   1        LCD_printCenter(0, 120,"enter mes 3  300" , 2,RED, BLACK);
+ 294   1        Record(300);
+ 295   1        PlayI(300);
+ 296   1        
+ 297   1      
+ 298   1      }
+ 299          void test_play_all()
+ 300          {
+ 301   1        LCD_fillScreen(BLACK);
+ 302   1        LCD_printCenter(0, 10,"play mes 0  0" , 2,RED, BLACK);
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 6   
+
+ 303   1        PlayI(0);
+ 304   1        //LCD_fillScreen(BLACK);
+ 305   1        LCD_printCenter(0, 40,"play mes 1  100" , 2,RED, BLACK);
+ 306   1        PlayI(100);
+ 307   1        //LCD_fillScreen(BLACK);
+ 308   1        LCD_printCenter(0, 80,"play mes 2  200" , 2,RED, BLACK);
+ 309   1        PlayI(200);
+ 310   1        //LCD_fillScreen(BLACK);
+ 311   1        LCD_printCenter(0, 120,"play mes 3  300" , 2,RED, BLACK);
+ 312   1        PlayI(300);
+ 313   1      }
+ 314          
+ 315          
+ 316          #if 0
+              int IsAlarmDetected_trial()
+              {
+                static int j=0;
+                int y700,y1500,i,res;
+                short max,min,innn,num=0 ;
+                //while(1)  
+                //innn=2*ADC_IN(6); //P3.0 num=6
+                max=0;
+                min=0;
+                //lcd_string_line(1,0,"freq=500     ");
+                while(sw6)
+                { 
+                   
+                   sprintf(my_string,"freq=%3d      ",j); 
+                  ScreenOneColor(White);
+                  PutStringSize(0,200,"********(1) ",1,Blue); 
+                 for(i=0;i<205;i++)   
+                   {
+                      data_in[i]=2*ADC_IN(6); //P3.0 num=6
+                      wait_us(112);//dt sample
+                   }
+                  
+                  
+                  
+                  res=(int)(goertzel_mag(205,j,8000));  //1000hz
+                  if (res>max) 
+                  {
+                    max=res;
+                    num=1;
+                  }
+                  if (res==max) num++;
+                  if (res<min) min=res;
+                  //lcd_clr();
+                  sprintf(my_string,"ma=%3d mx=%3d %2d",res,max,num);
+                  ScreenOneColor(White);
+                  PutStringSize(0,200,"********(2) ",1,Blue);
+                  wait_ms(30);
+                   if (!sw7) 
+                   {
+                     j=j+100;
+                     ScreenOneColor(White);
+                     wait_ms(200);
+                     max=0;
+                     min=0;
+                   }
+                } 
+                
+                sprintf(my_string,"max=%d min=%d",max,min);
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 7   
+
+                ScreenOneColor(White);
+                  PutStringSize(0,200,"********(3) ",1,Blue);
+              /*
+                  max=data_in[0];
+                min=data_in[0];
+                for(i=1;i<205;i++)
+                {
+                   if (data_in[i]<min) min=data_in[i];
+                   if (data_in[i]>max) max=data_in[i];
+                }   
+                for(i=0;i<2000;i+=100)
+                {
+                  res=(int)(goertzel_mag(205,i,8000));  //1000hz
+                  lcd_clr();
+                  sprintf(my_string," freq=%d mag=%d",i,res);
+                  ScreenOneColor(White);
+                  PutStringSize(0,200,"********(1.1) ",1,Blue);
+                } 
+              */    
+              #if 0   
+                  y700=(int)(goertzel_mag(205,700,8000)); //1000hz
+                  if (y700<MAG_FOR_FIRST_CALL_700HZ)
+                    return 0;
+                  wait_ms(DELAY_BETWEEN_700_AND_1500);
+                  for(i=0;i<205;i++)   
+                  {
+                      data_in[i]=2*ADC_IN(17);  //P0.3 num=17
+                      wait_us(112);//dt sample
+                  }
+                  y1500=(int)(goertzel_mag(205,1500,8000)); //1500hz
+                  y700=(int)(goertzel_mag(205,700,8000)); //700hz      
+                  if ((y700<MAG_FOR_SECOND_CALL_700HZ) && (y1500>MAG_FOR_FIRST_1500HZ))
+                    return 1 ; 
+                  else 
+                    return 0;
+              #endif 
+               return 1;    
+              }
+              
+              
+              #endif 
+ 406          
+ 407          // this function is been called for  detecting red sirne 
+ 408          // the function return "1" if the alarm has been set otherwise return "0"
+ 409          int IsAlarmDetected(int numofinstans,int mag)
+ 410          {
+ 411   1        short y800=0,j,i,res,y700,y600;
+ 412   1        num=0;
+ 413   1        for(j=0;j<500;j++)
+ 414   1        {   
+ 415   2          for(i=0;i<205;i++)   
+ 416   2           { 
+ 417   3              data_in[i]=2*ADC_IN(6); //P3.0 num=6
+ 418   3              delay_us(112);//dt sample
+ 419   3              
+ 420   3           }  
+ 421   2        
+ 422   2          y700=(int)(goertzel_mag(205,700,8000)); //1000hz
+ 423   2          y600=(int)(goertzel_mag(205,600,8000)); //1000hz     
+ 424   2          res=(int)(goertzel_mag(205,800,8000));  //1000hz
+ 425   2          sprintf(my_string,"res=%3d num=%3d",res,num);
+ 426   2          LCD_fillScreen(WHITE);
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 8   
+
+ 427   2          LCD_print2C(0,200,"********(4) ",1,WHITE,BLACK);
+ 428   2          //PutStringSize(0,200,"********(4) ",1,Blue); 
+ 429   2          if ((res>y800) && (y700<20) && (y600<20)) y800=res;
+ 430   2          //if (res>mag) num++;
+ 431   2          if (y800>mag) num++;     
+ 432   2          if ((y800>mag) && (num>numofinstans))
+ 433   2          {
+ 434   3              delay_ms(1000);
+ 435   3              break;      
+ 436   3          }
+ 437   2            
+ 438   2         }
+ 439   1         if ((y800>mag) && (num>numofinstans))
+ 440   1           return 1;
+ 441   1         else 
+ 442   1           return 0;
+ 443   1      #if 0  
+                  if (y800<MAG_FOR_FIRST_CALL_700HZ)
+                    continue
+                  wait_ms(DELAY_BETWEEN_700_AND_1500);
+                  for(i=0;i<205;i++)   
+                  {
+                      data_in[i]=2*ADC_IN(6); //P3.0 num=6
+                      wait_us(112);//dt sample
+                  }
+                  y1500=(int)(goertzel_mag(205,1500,8000)); //1500hz
+                  y700=(int)(goertzel_mag(205,700,8000)); //700hz      
+                  if ((y700<MAG_FOR_SECOND_CALL_700HZ) && (y1500>MAG_FOR_FIRST_1500HZ))
+                    return 1 ; 
+                  else 
+                    return 0;
+              #endif  
+ 459   1      }
+ 460          
+ 461          int IsAlarmDetected2()
+ 462          {
+ 463   1        int mag_temp,detect;
+ 464   1        int j,i;
+ 465   1        int k=0;
+ 466   1        num=0;
+ 467   1        LCD_fillScreen(BLACK);
+ 468   1        for(j=0;j<NUM_OF_FREQ_TO_CHECK;j++)
+ 469   1        {
+ 470   2          NumInstans[j] = 0;  
+ 471   2        }
+ 472   1        for(j=0;j<600/NUM_OF_FREQ_TO_CHECK;j++)
+ 473   1        {   
+ 474   2          for(i=0;i<205;i++)   
+ 475   2           { 
+ 476   3              data_in[i]=2*ADC_IN(21);  //P1.0 num=21
+ 477   3              delay_us(112);//dt sample
+ 478   3              
+ 479   3           }  
+ 480   2      
+ 481   2          for(i=0;i<NUM_OF_FREQ_TO_CHECK;i++)
+ 482   2           {
+ 483   3             mag_temp=(int)(goertzel_mag(205,wave_property_arr[i].freq,8000));
+ 484   3             k++; 
+ 485   3            //sprintf(my_string,"m=%3d f=%3d i=%d",mag_temp,wave_property_arr[i].freq,NumInstans[i]);
+ 486   3      if ((k%20==0) || (k%20==1))
+ 487   3      {
+ 488   4             
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 9   
+
+ 489   4            LCD_setCursor (10, 100);
+ 490   4            if (i==0) 
+ 491   4            {  
+ 492   5              LCD_setCursor (10, 0);
+ 493   5              printf("m=%3d f=%3d i=%d",mag_temp,wave_property_arr[i].freq,NumInstans[i]);
+ 494   5            }
+ 495   4      
+ 496   4            if (i==1) 
+ 497   4            {  
+ 498   5              LCD_setCursor (10,100);
+ 499   5              printf("m=%3d f=%3d i=%d",mag_temp,wave_property_arr[i].freq,NumInstans[i]);
+ 500   5            }
+ 501   4      
+ 502   4            if (i==2) 
+ 503   4            {  
+ 504   5              LCD_setCursor (10, 200);
+ 505   5              printf("m=%3d f=%3d i=%d",mag_temp,wave_property_arr[i].freq,NumInstans[i]);
+ 506   5            }
+ 507   4          
+ 508   4      }       
+ 509   3        
+ 510   3                  
+ 511   3             
+ 512   3          //   if (i==1) LCD_print2C(20,100,my_string,2,RED, BLACK);
+ 513   3          //   if (i==2) LCD_print2C(20,200,my_string,2,RED, BLACK);
+ 514   3             
+ 515   3             
+ 516   3      //       if (i==0) lcd_string_line(1,0,my_string);
+ 517   3      //       if (i==1) lcd_string_line(2,0,my_string);
+ 518   3      //       if (i==2) lcd_string_line(1,0,my_string);
+ 519   3      //       wait_ms(50);        
+ 520   3             if (mag_temp > wave_property_arr[i].Th_mag)
+ 521   3             {
+ 522   4               NumInstans[i]++;
+ 523   4             }
+ 524   3           }
+ 525   2           
+ 526   2         }
+ 527   1         
+ 528   1         detect=1;
+ 529   1         for(i=0;i<NUM_OF_FREQ_TO_CHECK;i++)
+ 530   1         {
+ 531   2           if (NumInstans[i] < wave_property_arr[i].Th_NumInstans)
+ 532   2           {
+ 533   3              detect = 0 ;
+ 534   3              break;
+ 535   3           }       
+ 536   2         }
+ 537   1         return(detect);
+ 538   1      }
+ 539          
+ 540          
+ 541          
+ 542          float goertzel_mag(int numSamples,int TARGET_FREQUENCY,int SAMPLING_RATE)
+ 543          {
+ 544   1      
+ 545   1        int     k,i;
+ 546   1        float analog;
+ 547   1        float   floatnumSamples;
+ 548   1        float   omega,sine,cosine,coeff,q0,q1,q2,magnitude,real,imag;
+ 549   1        float   scalingFactor = numSamples / 2.0;
+ 550   1      
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 10  
+
+ 551   1        floatnumSamples = (float) numSamples;
+ 552   1        k = (int) (0.5 + ((floatnumSamples * TARGET_FREQUENCY) / SAMPLING_RATE));
+ 553   1        omega = (2.0 * 3.14 * k) / floatnumSamples;
+ 554   1        sine = sin(omega);
+ 555   1        cosine = cos(omega);
+ 556   1        coeff = 2.0 * cosine;
+ 557   1        q0=0;
+ 558   1        q1=0;
+ 559   1        q2=0;
+ 560   1      
+ 561   1        for(i=0; i<numSamples; i++)
+ 562   1        {
+ 563   2          analog=data_in[i];
+ 564   2          q0 = coeff * q1 - q2 + analog;
+ 565   2          q2 = q1;
+ 566   2          q1 = q0;
+ 567   2        }
+ 568   1      
+ 569   1        // calculate the real and imaginary results
+ 570   1        // scaling appropriately
+ 571   1        real = (q1 - q2 * cosine) / scalingFactor;
+ 572   1        imag = (q2 * sine) / scalingFactor;
+ 573   1      
+ 574   1        magnitude = sqrt(real*real + imag*imag);
+ 575   1      
+ 576   1        return magnitude;
+ 577   1      
+ 578   1      }
+ 579          
+ 580          
+ 581          // P2.0 num=0,P2.1 num=1,P2.2 num=2,P2.3 num=3,P2.5 num=4,P2.6 num=5,P3.0 num=6,P3.1 num=7,P3.4 num=8,P3.5
+             - num=9,
+ 582          // P3.7 num=10,P4.0 num=11,P4.3 num=12,P4.4 num=13,P4.5 num=14,P4.6 num=15
+ 583          // P0.3 num=17, P0.4 num=18,P1.1 num=19, P1.2 num=20, P1.0 num=21, P1.3 num=22, P1.6 num=23, P1.7 num=24,
+ 584          //  P2.4 num=25, P2.7 num=26, P3.2 num=27, P3.3 num=28, P3.6 num=29, P4.1 num=32, P4.2 num=33, P4.7 num=34
+ 585          // Temp Sensor num=30, VDD   num=31
+ 586          
+ 587          int ADC_IN(int num)
+ 588          {
+ 589   1        AMX0N     = 0x1F;// negtive input= GND
+ 590   1        AMX0P=num;
+ 591   1        delay_us(1);
+ 592   1        AD0BUSY=1; // start conversion 
+ 593   1        while(!AD0INT); // wait end convesion 
+ 594   1        AD0INT = 0;   // clear ADC0 conversion complete flag 
+ 595   1        return (ADC0);
+ 596   1      }
+ 597          
+ 598          
+ 599          
+ 600          
+ 601          
+ 602          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   4597    ----
+   CONSTANT SIZE    =    499    ----
+   XDATA SIZE       =    458      84
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+C51 COMPILER V9.59.0.0   MAIN                                                              04/21/2023 10:38:38 PAGE 11  
+
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

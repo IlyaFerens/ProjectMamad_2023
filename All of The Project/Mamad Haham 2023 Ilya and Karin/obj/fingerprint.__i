@@ -1,0 +1,1 @@
+"fingerprint.c" LARGE OPTIMIZE (8,SPEED) INCDIR(.\font;.\LCD;.\sys;.\touch;.\GUI;.\USER) DEBUG OBJECTEXTEND TABS (2) OBJECT(.\obj\fingerprint.obj)
